@@ -1,0 +1,33 @@
+## submit with:
+## cmsenv;  condor_submit subHGCScintAnalyzer.sub
+
+executable  = $(cmssw)/src/UserCode/HGCElectronicsValidation/test/condor/runHGCScintAnalyzer.sh
+arguments   = $(cmssw) $(samples_dir)/$(tag) $(maxevents) $(outdir) False $(adcThrMIP) $(adcThrMIPbxm1) $(geometry) $(scaleByDoseFactor) $(jobTag)
+output      = $(outdir)/job_$(ProcId).out
+error       = $(outdir)/job_$(ProcId).err
+log         = $(outdir)/subHGCScintAnalyzer.log
++JobFlavour = "espresso"
+#workday
+should_transfer_files = yes
+when_to_transfer_output = on_exit
+
+# Set inputs
+samples_dir   = /eos/cms/store/cmst3/group/hgcal/CMG_studies/Production
+cmssw         = /afs/cern.ch/work/m/mmazza/private/projects/HGCElectronicsValidation/CMSSW_13_1_0_pre4/
+maxevents     = 2
+#maxevents     = -1
+
+#baseline config
+jobTag=test3
+adcThrMIP= 0.5
+adcThrMIPbxm1= 2.5
+geometry=Extended2026D99
+outdir=/afs/cern.ch/work/m/mmazza/private/projects/HGCElectronicsValidation/CMSSW_13_1_0_pre4/src/UserCode/HGCElectronicsValidation/test/condor/condorOutput/Job_$(jobTag)/
+
+scaleByDoseFactor=0.0
+tag=TTbar_TuneCP5_14TeV-pythia8_PU200_startup_nothr_CMSSW_13_0_0_pre4_Extended2026D99
+queue 1
+
+#scaleByDoseFactor=1.0
+#tag=TTbar_TuneCP5_14TeV-pythia8_PU200_aged_nothr_CMSSW_13_0_0_pre4_Extended2026D99
+#queue 1
