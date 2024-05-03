@@ -32,48 +32,61 @@ HGCScintAnalyzer::HGCScintAnalyzer(const edm::ParameterSet& iConfig):
 {
   // do what ever initialization is needed
 
-  edm::Service<TFileService> fs;
+    edm::Service<TFileService> fs;
 
-  // TTree
-  tree_ = fs->make<TTree>("ntuple","ntuple");
-  tree_->Branch("npu", &b_npu_, "pileup/I");
-  
-  for ( const auto &mpair : HGCTileBoards::tb_map ) {
-    std::string tb_name = mpair.first;
-    TString rs_tb_name = tb_name;
+    // TTree
+    t_events_ = fs->make<TTree>("Events","Events");
+    t_info_ = fs->make<TTree>("Info","Info"); // information that does not change between events
 
-    tree_->Branch(rs_tb_name+"_tdcHits", &b_boardTdcHits_[tb_name], rs_tb_name+"_tdcHits/I");
-    tree_->Branch(rs_tb_name+"_toaHits", &b_boardToaHits_[tb_name], rs_tb_name+"_toaHits/I");
-    tree_->Branch(rs_tb_name+"_adcHits", &b_boardAdcHits_[tb_name], rs_tb_name+"_adcHits/I");
+    t_events_->Branch("npu", &b_npu_, "pileup/I");
+    for ( const auto &mpair : HGCTileBoards::tb_map ) {
+        std::string tb_name = mpair.first;
+        TString rs_tb_name = tb_name;
+        t_events_->Branch(rs_tb_name+"_tdcHits", &b_tboard_TdcHits_[tb_name], rs_tb_name+"_tdcHits/I");
+        t_events_->Branch(rs_tb_name+"_toaHits", &b_tboard_ToaHits_[tb_name], rs_tb_name+"_toaHits/I");
+        t_events_->Branch(rs_tb_name+"_adcHits", &b_tboard_AdcHits_[tb_name], rs_tb_name+"_adcHits/I");
+        t_info_->Branch(rs_tb_name+"_validDetIds", &b_tboard_ValidDetIds_[tb_name], rs_tb_name+"_validDetIds/I");
+    }
+
+    // histograms
+    //h_validDetIds_=fs->make<TH1F>("validDetIds",";Layer;Number of valid detIDs/layer",50,0.5,50.5);
+    h_cellCount_=fs->make<TH1F>("cellcount",";Layer;Number of cells/layer",50,0.5,50.5);
+    h_tdcCountProf_=fs->make<TProfile>("tdccount",";Layer;Number of hits/layer",50,0.5,50.5);
+    h_toaCountProf_=fs->make<TProfile>("toacount",";Layer;Number of hits/layer",50,0.5,50.5);
+    h_adcCountProf_=fs->make<TProfile>("adccount",";Layer;Number of hits/layer",50,0.5,50.5);
+
+    h_adcHitsVsPU_=fs->make<TH2F>("adchitsvspu",";Number of PU interactions; Number of ADC hits",100,100,300,1000,0,4000); 
+
+    h2_tdcCount_=fs->make<TProfile2D>("tdccount2D",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
+    h2_toaCount_=fs->make<TProfile2D>("toacount2D",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
+    h2_adcCount_=fs->make<TProfile2D>("adccount2D",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
+
     
-  }
+    layerTdcHits_.resize(Nlayers_,0);
+    layerToaHits_.resize(Nlayers_,0);
+    layerAdcHits_.resize(Nlayers_,0);
+    layerValidDetIds_.resize(Nlayers_,0);
 
-  // histograms
-  h_cellCount_=fs->make<TH1F>("cellcount",";Layer;Number of cells/layer",50,0.5,50.5);
-  h_tdcCountProf_=fs->make<TProfile>("tdccount",";Layer;Number of hits/layer",50,0.5,50.5);
-  h_toaCountProf_=fs->make<TProfile>("toacount",";Layer;Number of hits/layer",50,0.5,50.5);
-  h_adcCountProf_=fs->make<TProfile>("adccount",";Layer;Number of hits/layer",50,0.5,50.5);
-  h_adcHitsVsPU_=fs->make<TH2F>("adchitsvspu",";Number of PU interactions; Number of ADC hits",100,100,300,1000,0.5e5,5e5);
-
-  h2_tdcCount_=fs->make<TH2F>("tdccount",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
-  h2_toaCount_=fs->make<TH2F>("toacount",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
-  h2_adcCount_=fs->make<TH2F>("adccount",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
-
-  layerTdcHits_.resize(50,0);
-  layerToaHits_.resize(50,0);
-  layerAdcHits_.resize(50,0);
-
-  tileTdcHits_.resize(50,std::vector<int>(42));
-  tileToaHits_.resize(50,std::vector<int>(42));
-  tileAdcHits_.resize(50,std::vector<int>(42));
-  
+    tileTdcHits_.resize(Nlayers_,std::vector<int>(42));
+    tileToaHits_.resize(Nlayers_,std::vector<int>(42));
+    tileAdcHits_.resize(Nlayers_,std::vector<int>(42));
+    tileValidDetIds_.resize(Nlayers_,std::vector<int>(42));
+    
 }
 
+// ------------ destructor  ------------
 HGCScintAnalyzer::~HGCScintAnalyzer() {
-  // do anything here that needs to be done at desctruction time
-  // (e.g. close files, deallocate resources etc.)
-  //
-  // please remove this method altogether if it would be left empty
+    // do anything here that needs to be done at desctruction time
+    // (e.g. close files, deallocate resources etc.)
+    //
+    // please remove this method altogether if it would be left empty
+}
+
+
+// ------------ method called once each job just before starting event loop  ------------
+void HGCScintAnalyzer::beginJob() {
+
+
 }
 
 //
@@ -83,6 +96,7 @@ HGCScintAnalyzer::~HGCScintAnalyzer() {
 // ------------ method called for each event  ------------
 void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) 
 {
+  eventsCount_++;
   using namespace edm;
   
 
@@ -99,26 +113,54 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    [](auto & v){ std::fill(std::begin(v), std::end(v), 0); });
 
   for ( const auto &mpair : HGCTileBoards::tb_map ) {
-    // std::fill(b_boardTdcHits_[tb_name].begin(), b_boardTdcHits_[tb_name].end(), 0);
-    // std::fill(b_boardToaHits_[tb_name].begin(), b_boardToaHits_[tb_name].end(), 0);
-    // std::fill(b_boardAdcHits_[tb_name].begin(), b_boardAdcHits_[tb_name].end(), 0);
     std::string tb_name = mpair.first;
-    b_boardTdcHits_[tb_name] = 0;
-    b_boardToaHits_[tb_name] = 0;
-    b_boardAdcHits_[tb_name] = 0;
-    
+    b_tboard_TdcHits_.at(tb_name) = 0;
+    b_tboard_ToaHits_.at(tb_name) = 0;
+    b_tboard_AdcHits_.at(tb_name) = 0;
+    b_tboard_ValidDetIds_.at(tb_name) = 0;
   }
 
-  // get detector information //FIXME: currently not used
+
+  // get detector information 
   edm::ESHandle<CaloGeometry> geom = iSetup.getHandle(caloGeomToken_);
   const HGCalGeometry *geo = static_cast<const HGCalGeometry*>(geom->getSubdetectorGeometry(DetId::HGCalHSc, ForwardSubdetector::ForwardEmpty));
 
-  const auto &validDetIds = geo->getValidDetIds();
-  for(const auto &didIt : validDetIds) {
-    HGCScintillatorDetId detId(didIt.rawId());
-    if(detId.zside()<0) continue; // CHECK: do only one side since symmetrical? 
-    int layer{detId.layer()};
-    h_cellCount_->Fill(layer+layerIdxOffset_);
+  // fill validDetId histogram for first event only
+  if (eventsCount_==1){
+    //std::string tb_name_tmp = "L34_J8";
+    const auto &validDetIds = geo->getValidDetIds();
+    for(const auto &didIt : validDetIds) {
+      HGCScintillatorDetId detId(didIt.rawId());
+      if(detId.zside()<0) continue; // CHECK: do only one side since symmetrical? 
+      
+      // tile info
+      int layer = detId.layer() + layerIdxOffset_;  
+      int iradius {detId.iradius()};
+      int ieta {detId.ieta()};
+      int iphi {detId.iphi()};
+      h_cellCount_->Fill(layer);
+
+      // find its tileboar
+      for ( const auto &[tb_name, tb] : HGCTileBoards::tb_map ) {
+        if (layer!=tb.plane) { continue; } // the detIds taken from geo are numbered correctly
+        if ((iradius>tb.irmin)&&(iradius<tb.irmax)) {          
+          // std::cout << "entered for layer " << tb.plane << ", iradius= " << iradius 
+          //       << ", ieta= " << ieta 
+          //       << ", iphi= " << iphi << std::endl;
+          b_tboard_ValidDetIds_.at(tb_name) += 1;
+          break;
+        }
+      }
+    }
+    // store values 
+    // for ( const auto &[tb_name, tb] : HGCTileBoards::tb_map ) {
+    //   tb.nValidDetIds = b_tboard_ValidDetIds_.at(tb_name) / 36;
+    // }
+  }
+  else{ 
+    if (eventsCount_%100==0){
+      std::cout << "Event " << eventsCount_ << std::endl;
+      }
   }
 
   // analyze digi collections
@@ -139,39 +181,44 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     }
   }
 
-  // fill profile histograms
-  int totalADC{0};
-  for(size_t idx=0; idx<layerTdcHits_.size(); idx++){
-    int layer = idx+1+layerIdxOffset_;
+  // fill profile histograms per layer
+  totalADCHits_ = 0;
+  for(size_t layIdx=0; layIdx<layerTdcHits_.size(); layIdx++){
+    int layer = layIdx; 
     if (DEBUG) {
-      std::cout << "layerTdcHits_ = " << layerTdcHits_[idx] 
-                << "layerToaHits_ = " << layerToaHits_[idx] 
-                << "layerAdcHits_ = " << layerAdcHits_[idx] 
+      std::cout << "Filling 1D profile layer histograms:" 
+                << " layIdx = " << layIdx 
+                << " layer = " << layer 
+                << "layerTdcHits_ = " << layerTdcHits_.at(layIdx)
+                << "layerToaHits_ = " << layerToaHits_.at(layIdx)
+                << "layerAdcHits_ = " << layerAdcHits_.at(layIdx)
                 << std::endl;
     }
-    h_tdcCountProf_->Fill(layer,layerTdcHits_[idx]);
-    h_toaCountProf_->Fill(layer,layerToaHits_[idx]);
-    h_adcCountProf_->Fill(layer,layerAdcHits_[idx]);
-    totalADC+=layerAdcHits_[idx];
+    h_tdcCountProf_->Fill(layer,layerTdcHits_.at(layIdx));
+    h_toaCountProf_->Fill(layer,layerToaHits_.at(layIdx));
+    h_adcCountProf_->Fill(layer,layerAdcHits_.at(layIdx));
+    totalADCHits_+=layerAdcHits_.at(layIdx);
   }  
-  h_adcHitsVsPU_->Fill(b_npu_,totalADC, 1);
+  h_adcHitsVsPU_->Fill(b_npu_,totalADCHits_, 1); 
+
 
   // fill 2D tiles histograms
   for(size_t layIdx=0; layIdx<tileTdcHits_.size(); layIdx++){
     for(size_t rinIdx=0; rinIdx<tileTdcHits_[0].size(); rinIdx++){
-      int layer = layIdx+1+layerIdxOffset_;
+      int layer = layIdx;
       if (DEBUG) {
-        std::cout << "layIdx = " << layIdx 
-                  << ", layer = " << layer 
+        std::cout << "Filling 2D tiles histograms:" 
+                  << " layIdx = " << layIdx 
                   << ", rinIdx = " << rinIdx 
                   << ", tileTdcHits_" << tileTdcHits_.at(layIdx).at(rinIdx)
                   << ", tileToaHits_" << tileToaHits_.at(layIdx).at(rinIdx)
+                  << ", tileAdcHits_" << tileAdcHits_.at(layIdx).at(rinIdx)
                   << std::endl;
       }
 
-      h2_tdcCount_->Fill(layer,tileTdcHits_.at(layIdx).at(rinIdx),1);
-      h2_toaCount_->Fill(layer,tileToaHits_.at(layIdx).at(rinIdx),1);
-      h2_adcCount_->Fill(layer,tileAdcHits_.at(layIdx).at(rinIdx),1);
+      h2_tdcCount_->Fill(layer,rinIdx,tileTdcHits_.at(layer).at(rinIdx));
+      h2_toaCount_->Fill(layer,rinIdx,tileToaHits_.at(layIdx).at(rinIdx));
+      h2_adcCount_->Fill(layer,rinIdx,tileAdcHits_.at(layIdx).at(rinIdx));
     }  
   }
 
@@ -179,14 +226,21 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     for ( const auto &mpair : HGCTileBoards::tb_map ) {
       std::cout << mpair.first;
       std::string tb_name = mpair.first;
-      std::cout << ", b_boardTdcHits_ " << b_boardTdcHits_[tb_name];
-      std::cout << ", b_boardToaHits_ " << b_boardToaHits_[tb_name];
-      std::cout << ", b_boardAdcHits_ " << b_boardAdcHits_[tb_name] << std::endl;
+      // std::cout << ", b_tboard_TdcHits_ " << b_tboard_TdcHits_.at(tb_name);
+      // std::cout << ", b_tboard_ToaHits_ " << b_tboard_ToaHits_.at(tb_name);
+      // std::cout << ", b_tboard_AdcHits_ " << b_tboard_AdcHits_.at(tb_name) << std::endl;
     }
   }
    
   // fill tree for each event
-  tree_->Fill();
+  t_events_->Fill();
+  if (eventsCount_==1){
+    t_info_->Fill(); 
+  //    for ( const auto &mpair : HGCTileBoards::tb_map ) {
+  //   std::string tb_name = mpair.first;    
+  //   std::cout<< tb_name << " b_tboard_ValidDetIds_ = " << b_tboard_ValidDetIds_.at(tb_name) << std::endl;          
+  // }
+  }
 
 }
 
@@ -208,7 +262,7 @@ void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, 
     if(detId.zside()<0) continue; // CHECK: do only one side since symmetrical? 
 
     // tile info
-    int layer{detId.layer()};
+    int layer{detId.layer()+layerIdxOffset_};
     int iradiusAbs{detId.iradiusAbs()};
     int iradius{detId.iradius()};
     int ietaAbs{detId.ietaAbs()};
@@ -232,54 +286,68 @@ void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, 
     //uint32_t thr{std::floor(mipADC*adcThrMIP_)};
     //bool passThr{isTDC||rawData>thr};
    
+    // Find corresponding tileboard and fill vectors
     for ( const auto &[tb_name, tb] : HGCTileBoards::tb_map ) {
-      if (layer+layerIdxOffset_!=tb.plane) { continue; }
+      // check if tile is in the same layer
+      if (layer!=tb.plane) { continue; }
       if (DEBUG) {
         std::cout << "tb_name: " << tb_name << std::endl;
         std::cout << "layer = " << tb.plane << ", tb.irmin = " << tb.irmin << ", tb.irmax = " << tb.irmax<< std::endl;
       }
+      // check if tile is in the same radius range
       if ((iradius>tb.irmin)&&(iradius<tb.irmax)) {
         if (!isBusy){
-          if (isTDC) { b_boardTdcHits_.at(tb_name) += 1; }
-          if (isTOA) { b_boardToaHits_.at(tb_name) += 1; }
-          if (!isTDC) { b_boardAdcHits_.at(tb_name) += 1; }
+          if (isTDC) { b_tboard_TdcHits_.at(tb_name) += 1; }
+          if (isTOA) { b_tboard_ToaHits_.at(tb_name) += 1; }
+          if (!isTDC) { b_tboard_AdcHits_.at(tb_name) += 1; }          
         }
         break;
       }
-
     }
 
-    //global counts for the in-time bunch
-    int layidx{layer-1};
+
+    int layidx = layer; //-1;
     if (!isBusy) {
-      if (isTDC) {
-        layerTdcHits_[layidx]+=1;
-        tileTdcHits_[layidx][iradiusAbs]+=1;
-      }
-      if (isTOA) {  
-        layerToaHits_[layidx]+=1;
-        tileToaHits_[layidx][iradiusAbs]+=1;
-      }
-      if (!isTDC) { 
-        layerAdcHits_[layidx]+=1;
-        tileAdcHits_[layidx][iradiusAbs]+=1;
-      }
-
+        if (isTDC) {
+            layerTdcHits_[layidx]+=1;
+            tileTdcHits_[layidx][iradiusAbs]+=1;
+        }
+        if (isTOA) {  
+            layerToaHits_[layidx]+=1;
+            tileToaHits_[layidx][iradiusAbs]+=1;
+        }
+        if (!isTDC) { 
+            layerAdcHits_[layidx]+=1;
+            tileAdcHits_[layidx][iradiusAbs]+=1;
+        }
     }   
-
   }
 
+  // Divide hits per tileboard by 360/10=36 to remove repetition in phi
+  // Actually iphi range is 1-288, so I will divide by 28.8
+  //  for ( const auto &[tb_name, tb] : HGCTileBoards::tb_map ) {
+  //     std::cout << "Before: " << b_tboard_ToaHits_.at(tb_name) << std::endl;
+  //       b_tboard_ToaHits_.at(tb_name) /= 36; //28.8; //36;
+  //       b_tboard_TdcHits_.at(tb_name) /= 36; //28.8; //36;
+  //       b_tboard_AdcHits_.at(tb_name) /= 36; //28.8; //36;       
+  //       std::cout << "After: " << b_tboard_ToaHits_.at(tb_name) << std::endl;   
+  //   }
+
 }
 
 
-// ------------ method called once each job just before starting event loop  ------------
-void HGCScintAnalyzer::beginJob() {
-  // please remove this method if not needed
-}
 
 // ------------ method called once each job just after ending the event loop  ------------
 void HGCScintAnalyzer::endJob() {
   // please remove this method if not needed
+  // for(size_t idx=0; idx<layerTdcHits_.size(); idx++){
+  //   int layer = idx+1+layerIdxOffset_;
+  //     std::cout << "idx = " << idx 
+  //               << "layerTdcHits_ = " << h_tdcCountProf_->GetBinContent(idx)
+  //               << "layerToaHits_ = " << h_toaCountProf_->GetBinContent(idx)
+  //               << "layerAdcHits_ = " << h_adcCountProf_->GetBinContent(idx)
+  //               << std::endl;
+  // }  
 }
 
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------

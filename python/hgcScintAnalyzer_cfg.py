@@ -31,7 +31,7 @@ options.register('fold',
                  VarParsing.varType.bool,
                  "fold wafers histos x6/x3 for EE/HE")
 options.register('geometry', 
-                 'Extended2026D49', 
+                 'Extended2026D99', 
                  VarParsing.multiplicity.singleton, 
                  VarParsing.varType.string, 
                  'geometry to use')

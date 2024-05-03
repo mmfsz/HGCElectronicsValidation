@@ -32,6 +32,7 @@
 #include "TH1F.h"
 #include "TH2F.h"
 #include "TProfile.h"
+#include "TProfile2D.h"
 #include "TTree.h"
 
 //
@@ -56,30 +57,36 @@ class HGCScintAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources> 
   void analyzeDigis(edm::Handle<HGCalDigiCollection> &, const HGCalGeometry *);
 
   // ----------member data ---------------------------
- 
+  int eventsCount_{0};
+  int totalADCHits_{0};
+
   edm::EDGetTokenT<std::vector<PileupSummaryInfo> > puToken_;
   edm::ESGetToken<CaloGeometry, CaloGeometryRecord> caloGeomToken_;
   edm::EDGetTokenT<HGCalDigiCollection> digisCEE_,digisCEH_;
 
-  int layerIdxOffset_{26}; // CHECKME: not sure why scint layers go from 8-21 instead of 34-47
+  int layerIdxOffset_{26}; // scint layers go from 8-21 instead of 34-47
 
 
-  std::vector<int> layerTdcHits_, layerToaHits_,layerAdcHits_;
-  std::vector<std::vector<int>> tileTdcHits_, tileToaHits_,tileAdcHits_;
+  std::vector<int> layerTdcHits_, layerToaHits_,layerAdcHits_,layerValidDetIds_;
+  std::vector<std::vector<int>> tileTdcHits_, tileToaHits_,tileAdcHits_, tileValidDetIds_;
 
-  TTree *tree_;
-  int b_npu_;
+  TTree *t_events_;
+  TTree *t_info_;
+  int b_npu_;  
   bool DEBUG=false;
-
+  int Nlayers_ = 51;
+  
   // tile boards info
-  std::map<std::string, int> b_boardTdcHits_;
-  std::map<std::string, int> b_boardToaHits_;
-  std::map<std::string, int> b_boardAdcHits_;
+  std::map<std::string, int> b_tboard_TdcHits_;
+  std::map<std::string, int> b_tboard_ToaHits_;
+  std::map<std::string, int> b_tboard_AdcHits_;
+  std::map<std::string, int> b_tboard_ValidDetIds_;
   
 
   TH1F *h_cellCount_;
   TProfile *h_tdcCountProf_,*h_toaCountProf_,*h_adcCountProf_;
-  TH2F *h_adcHitsVsPU_, *h2_tdcCount_, *h2_toaCount_, *h2_adcCount_;
+  TProfile2D *h2_tdcCount_, *h2_toaCount_, *h2_adcCount_;
+  TH2F *h_adcHitsVsPU_;
 
 };
 
