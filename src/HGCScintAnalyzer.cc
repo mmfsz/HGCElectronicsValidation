@@ -45,6 +45,7 @@ HGCScintAnalyzer::HGCScintAnalyzer(const edm::ParameterSet& iConfig):
         t_events_->Branch(rs_tb_name+"_tdcHits", &b_tboard_TdcHits_[tb_name], rs_tb_name+"_tdcHits/I");
         t_events_->Branch(rs_tb_name+"_toaHits", &b_tboard_ToaHits_[tb_name], rs_tb_name+"_toaHits/I");
         t_events_->Branch(rs_tb_name+"_adcHits", &b_tboard_AdcHits_[tb_name], rs_tb_name+"_adcHits/I");
+        t_events_->Branch(rs_tb_name + "_adcRawData", &b_tboard_AdcRawData_[tb_name], rs_tb_name + "_adcRawData/I");
         t_info_->Branch(rs_tb_name+"_validDetIds", &b_tboard_ValidDetIds_[tb_name], rs_tb_name+"_validDetIds/I");
     }
 
@@ -54,23 +55,34 @@ HGCScintAnalyzer::HGCScintAnalyzer(const edm::ParameterSet& iConfig):
     h_tdcCountProf_=fs->make<TProfile>("tdccount",";Layer;Number of hits/layer",50,0.5,50.5);
     h_toaCountProf_=fs->make<TProfile>("toacount",";Layer;Number of hits/layer",50,0.5,50.5);
     h_adcCountProf_=fs->make<TProfile>("adccount",";Layer;Number of hits/layer",50,0.5,50.5);
+    h_adcRawDataProf_ = fs->make<TProfile>("adcRawData", ";Layer;Number of hits/layer", 50, 0.5, 50.5);
 
     h_adcHitsVsPU_=fs->make<TH2F>("adchitsvspu",";Number of PU interactions; Number of ADC hits",100,100,300,1000,0,4000); 
 
-    h2_tdcCount_=fs->make<TProfile2D>("tdccount2D",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
-    h2_toaCount_=fs->make<TProfile2D>("toacount2D",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
-    h2_adcCount_=fs->make<TProfile2D>("adccount2D",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
+    h2_tdcCount_=fs->make<TProfile2D>("tdccount2D",";Layer;Ring",50,0.5,50.5,44,-0.5,43.5);
+    h2_toaCount_=fs->make<TProfile2D>("toacount2D",";Layer;Ring",50,0.5,50.5,44,-0.5,43.5);
+    h2_adcCount_=fs->make<TProfile2D>("adccount2D",";Layer;Ring",50,0.5,50.5,44,-0.5,43.5);
+    h2_adcRawData_ = fs->make<TProfile2D>("adcRawData2D", ";Layer;Ring", 50, 0.5, 50.5, 44, -0.5, 43.5);
+    h2_adcRawData_entries_ = fs->make<TH2F>("adcRawData2DEntries", ";Layer;Ring", 50, 0.5, 50.5, 44, -0.5, 43.5);
 
-    
     layerTdcHits_.resize(Nlayers_,0);
     layerToaHits_.resize(Nlayers_,0);
     layerAdcHits_.resize(Nlayers_,0);
+    layerAdcRawData_.resize(Nlayers_, 0);
     layerValidDetIds_.resize(Nlayers_,0);
 
-    tileTdcHits_.resize(Nlayers_,std::vector<int>(42));
-    tileToaHits_.resize(Nlayers_,std::vector<int>(42));
-    tileAdcHits_.resize(Nlayers_,std::vector<int>(42));
-    tileValidDetIds_.resize(Nlayers_,std::vector<int>(42));
+    tileTdcHits_.resize(Nlayers_,std::vector<int>(NiRings_));
+    tileToaHits_.resize(Nlayers_,std::vector<int>(NiRings_));
+    tileAdcHits_.resize(Nlayers_,std::vector<int>(NiRings_));
+    tileAdcRawData_.resize(Nlayers_,std::vector<int>(NiRings_));
+    tileValidDetIds_.resize(Nlayers_,std::vector<int>(NiRings_));
+
+    
+    for(size_t layIdx=0; layIdx<14; layIdx++){
+      int layer_num = layIdx + 34;
+      TString title = "Layer" + std::to_string(layer_num) + "_AdcRawData";
+      hlist_layerAdcRawData_.push_back(fs->make<TH1F>(title, ";ADC Raw Data;", 100, 0., 100));
+    }
     
 }
 
@@ -104,6 +116,7 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   std::fill(layerTdcHits_.begin(), layerTdcHits_.end(), 0);
   std::fill(layerToaHits_.begin(), layerToaHits_.end(), 0);
   std::fill(layerAdcHits_.begin(), layerAdcHits_.end(), 0);
+  std::fill(layerAdcRawData_.begin(), layerAdcRawData_.end(), 0);
 
   std::for_each(std::begin(tileTdcHits_), std::end(tileTdcHits_),
    [](auto & v){ std::fill(std::begin(v), std::end(v), 0); });
@@ -111,12 +124,15 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    [](auto & v){ std::fill(std::begin(v), std::end(v), 0); });
   std::for_each(std::begin(tileAdcHits_), std::end(tileAdcHits_),
    [](auto & v){ std::fill(std::begin(v), std::end(v), 0); });
+  std::for_each(std::begin(tileAdcRawData_), std::end(tileAdcRawData_),
+   [](auto & v){ std::fill(std::begin(v), std::end(v), 0); });
 
   for ( const auto &mpair : HGCTileBoards::tb_map ) {
     std::string tb_name = mpair.first;
     b_tboard_TdcHits_.at(tb_name) = 0;
     b_tboard_ToaHits_.at(tb_name) = 0;
     b_tboard_AdcHits_.at(tb_name) = 0;
+    b_tboard_AdcRawData_.at(tb_name) = 0;
     b_tboard_ValidDetIds_.at(tb_name) = 0;
   }
 
@@ -197,6 +213,8 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     h_tdcCountProf_->Fill(layer,layerTdcHits_.at(layIdx));
     h_toaCountProf_->Fill(layer,layerToaHits_.at(layIdx));
     h_adcCountProf_->Fill(layer,layerAdcHits_.at(layIdx));
+    h_adcRawDataProf_->Fill(layer, layerAdcRawData_.at(layIdx));
+    
     totalADCHits_+=layerAdcHits_.at(layIdx);
   }  
   h_adcHitsVsPU_->Fill(b_npu_,totalADCHits_, 1); 
@@ -204,7 +222,7 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
   // fill 2D tiles histograms
   for(size_t layIdx=0; layIdx<tileTdcHits_.size(); layIdx++){
-    for(size_t rinIdx=0; rinIdx<tileTdcHits_[0].size(); rinIdx++){
+    for(size_t rinIdx=0; rinIdx<tileTdcHits_.at(0).size(); rinIdx++){
       int layer = layIdx;
       if (DEBUG) {
         std::cout << "Filling 2D tiles histograms:" 
@@ -218,7 +236,8 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
       h2_tdcCount_->Fill(layer,rinIdx,tileTdcHits_.at(layer).at(rinIdx));
       h2_toaCount_->Fill(layer,rinIdx,tileToaHits_.at(layIdx).at(rinIdx));
-      h2_adcCount_->Fill(layer,rinIdx,tileAdcHits_.at(layIdx).at(rinIdx));
+      h2_adcCount_->Fill(layer, rinIdx, tileAdcHits_.at(layIdx).at(rinIdx));
+      //h2_adcRawData_->Fill(layer, rinIdx, tileAdcRawData_.at(layIdx).at(rinIdx));
     }  
   }
 
@@ -236,10 +255,6 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   t_events_->Fill();
   if (eventsCount_==1){
     t_info_->Fill(); 
-  //    for ( const auto &mpair : HGCTileBoards::tb_map ) {
-  //   std::string tb_name = mpair.first;    
-  //   std::cout<< tb_name << " b_tboard_ValidDetIds_ = " << b_tboard_ValidDetIds_.at(tb_name) << std::endl;          
-  // }
   }
 
 }
@@ -299,7 +314,10 @@ void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, 
         if (!isBusy){
           if (isTDC) { b_tboard_TdcHits_.at(tb_name) += 1; }
           if (isTOA) { b_tboard_ToaHits_.at(tb_name) += 1; }
-          if (!isTDC) { b_tboard_AdcHits_.at(tb_name) += 1; }          
+          if (!isTDC) { 
+            b_tboard_AdcHits_.at(tb_name) += 1;
+            b_tboard_AdcRawData_.at(tb_name) += rawData;
+          }          
         }
         break;
       }
@@ -309,27 +327,32 @@ void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, 
     int layidx = layer; //-1;
     if (!isBusy) {
         if (isTDC) {
-            layerTdcHits_[layidx]+=1;
-            tileTdcHits_[layidx][iradiusAbs]+=1;
+            layerTdcHits_.at(layidx)+=1;
+            tileTdcHits_.at(layidx).at(iradiusAbs)+=1;
         }
         if (isTOA) {  
-            layerToaHits_[layidx]+=1;
-            tileToaHits_[layidx][iradiusAbs]+=1;
+            layerToaHits_.at(layidx)+=1;
+            tileToaHits_.at(layidx).at(iradiusAbs)+=1;
         }
         if (!isTDC) { 
-            layerAdcHits_[layidx]+=1;
-            tileAdcHits_[layidx][iradiusAbs]+=1;
+            layerAdcHits_.at(layidx)+=1;
+            layerAdcRawData_.at(layidx) += rawData;
+            tileAdcHits_.at(layidx).at(iradiusAbs)+=1;
+            //std::cout << "layidx = " << layidx << ", iradiusAbs = " << iradiusAbs << ", rawData = " << rawData << std::endl;
+            //tileAdcRawData_.at(layidx).at(iradiusAbs) += rawData;
+            h2_adcRawData_->Fill(layidx, iradiusAbs, rawData);
+            h2_adcRawData_entries_->Fill(layidx, iradiusAbs);
+            hlist_layerAdcRawData_.at(layidx - 34)->Fill(rawData);
         }
     }   
   }
 
   // Divide hits per tileboard by 360/10=36 to remove repetition in phi
-  // Actually iphi range is 1-288, so I will divide by 28.8
   //  for ( const auto &[tb_name, tb] : HGCTileBoards::tb_map ) {
   //     std::cout << "Before: " << b_tboard_ToaHits_.at(tb_name) << std::endl;
-  //       b_tboard_ToaHits_.at(tb_name) /= 36; //28.8; //36;
-  //       b_tboard_TdcHits_.at(tb_name) /= 36; //28.8; //36;
-  //       b_tboard_AdcHits_.at(tb_name) /= 36; //28.8; //36;       
+  //       b_tboard_ToaHits_.at(tb_name) /= 36; 
+  //       b_tboard_TdcHits_.at(tb_name) /= 36; 
+  //       b_tboard_AdcHits_.at(tb_name) /= 36; 
   //       std::cout << "After: " << b_tboard_ToaHits_.at(tb_name) << std::endl;   
   //   }
 

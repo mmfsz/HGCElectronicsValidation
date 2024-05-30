@@ -66,27 +66,29 @@ class HGCScintAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources> 
 
   int layerIdxOffset_{26}; // scint layers go from 8-21 instead of 34-47
 
-
-  std::vector<int> layerTdcHits_, layerToaHits_,layerAdcHits_,layerValidDetIds_;
-  std::vector<std::vector<int>> tileTdcHits_, tileToaHits_,tileAdcHits_, tileValidDetIds_;
+  std::vector<int> layerTdcHits_, layerToaHits_, layerAdcHits_, layerValidDetIds_, layerAdcRawData_;
+  std::vector<std::vector<int>> tileTdcHits_, tileToaHits_, tileAdcHits_, tileValidDetIds_, tileAdcRawData_;
 
   TTree *t_events_;
   TTree *t_info_;
   int b_npu_;  
   bool DEBUG=false;
   int Nlayers_ = 51;
+  int NiRings_ = 43;
   
   // tile boards info
   std::map<std::string, int> b_tboard_TdcHits_;
   std::map<std::string, int> b_tboard_ToaHits_;
   std::map<std::string, int> b_tboard_AdcHits_;
+  std::map<std::string, int> b_tboard_AdcRawData_;
   std::map<std::string, int> b_tboard_ValidDetIds_;
   
 
   TH1F *h_cellCount_;
-  TProfile *h_tdcCountProf_,*h_toaCountProf_,*h_adcCountProf_;
-  TProfile2D *h2_tdcCount_, *h2_toaCount_, *h2_adcCount_;
-  TH2F *h_adcHitsVsPU_;
+  std::vector<TH1F*> hlist_layerAdcRawData_;
+  TProfile *h_tdcCountProf_,*h_toaCountProf_,*h_adcCountProf_, *h_adcRawDataProf_;
+  TProfile2D *h2_tdcCount_, *h2_toaCount_, *h2_adcCount_, *h2_adcRawData_;
+  TH2F *h_adcHitsVsPU_,*h2_adcRawData_entries_;
 
 };
 
