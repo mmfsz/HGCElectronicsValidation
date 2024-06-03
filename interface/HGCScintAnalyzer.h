@@ -69,9 +69,11 @@ private:
   void endJob() override;
 
   void analyzeDigis(edm::Handle<HGCalDigiCollection> &, const HGCalGeometry *);
+  uint32_t getRawEleIdFromMap(HGCScintillatorDetId detId);
   void printDetIdBitValues(HGCScintillatorDetId &detId);
-  std::vector<float> minMaxRingPerLayer(const HGCalGeometry *geo, int layer);
-  std::vector<float> minMaxRingPerLayer(std::map<uint32_t, uint32_t> sipm_geo2ele_, int layer);
+  void printEleIdBitValues(HGCalElectronicsId &eleId);
+  std::vector<float> minMaxRingPerLayer(const HGCalGeometry *geo, int layer, bool compareRing);
+  std::vector<float> minMaxRingPerLayer(std::map<uint32_t, uint32_t> sipm_geo2ele_, int layer, bool compareRing);
   // ----------member data ---------------------------
   int eventsCount_{0};
   int totalADCHits_{0};
@@ -105,6 +107,7 @@ private:
   std::map<std::string, int> b_tboard_TdcHits_;
   std::map<std::string, int> b_tboard_ToaHits_;
   std::map<std::string, int> b_tboard_AdcHits_;
+  std::map<std::string, int> b_tboard_AdcOcc_;
   std::map<std::string, int> b_tboard_ValidDetIds_;
   
 

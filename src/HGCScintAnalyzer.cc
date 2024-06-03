@@ -56,6 +56,7 @@ HGCScintAnalyzer::HGCScintAnalyzer(const edm::ParameterSet &iConfig)
         t_events_->Branch(rs_tb_name+"_toaHits", &b_tboard_ToaHits_[tb_name], rs_tb_name+"_toaHits/I");
         t_events_->Branch(rs_tb_name+"_adcHits", &b_tboard_AdcHits_[tb_name], rs_tb_name+"_adcHits/I");
         t_info_->Branch(rs_tb_name+"_validDetIds", &b_tboard_ValidDetIds_[tb_name], rs_tb_name+"_validDetIds/I");
+        t_events_->Branch(rs_tb_name + "_adcOcc", &b_tboard_AdcOcc_[tb_name], rs_tb_name + "_adcOcc/I");
     }
 
     // histograms
@@ -136,56 +137,6 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   auto const &modules = iSetup.getData(moduleTkn_);
   sipm_geo2ele_ = this->mapGeoToElectronics(modules, cells, true, true);
   //sipm_ele2geo_ = this->mapGeoToElectronics(modules, cells, false, true);
-  std::cout << "analyze(): The map contains " << sipm_geo2ele_.size() << " elements." << std::endl;
-  std::cout << "==== Example from map ====" << std::endl;
-  int min_layer = 999;
-  int max_layer = -9;
-  int min_ring = 999;
-  int max_ring = -9;
-  int min_iphi = 999;
-  int max_iphi = -9;
-
-  for (const auto &pair : sipm_geo2ele_) {
-    HGCScintillatorDetId detIdFromMap(pair.first);
-    int layer_from_map = detIdFromMap.layer();
-    if (layer_from_map > max_layer) {
-      max_layer = layer_from_map;
-    } else if (layer_from_map < min_layer) {
-      min_layer = layer_from_map;
-    }
-
-    int ring_from_map = detIdFromMap.ring();
-    if (ring_from_map > max_ring) {
-      max_ring = ring_from_map;
-    } else if (layer_from_map < min_ring) {
-      min_ring = ring_from_map;
-    }
-
-    int iphi_from_map = detIdFromMap.iphi();
-    if (iphi_from_map > max_iphi) {
-      max_iphi = iphi_from_map;
-    } else if (iphi_from_map < min_iphi) {
-      min_iphi = iphi_from_map;
-    }
-      // if(detIdFromMap.zside()<0) {
-      //   std::cout << "detIdFromMap: " << detIdFromMap.rawId()
-      //   << ", type: " << detIdFromMap.type()
-      //   << ", zside: " << detIdFromMap.zside()
-      //   << ", layerDetId: " << detIdFromMap.layer()
-      //   << ", ring: " << detIdFromMap.ring()
-      //   << ", iradius: " << detIdFromMap.iradius()
-      //   << ", ieta: " << detIdFromMap.ieta()
-      //   << ", iphi: " << detIdFromMap.iphi()
-      //   << ", trigger: " << detIdFromMap.trigger()
-      //   << ", sipm: " << detIdFromMap.sipm()
-      //   << std::endl << std::endl;
-      // }
-      std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
-  }
-  std::cout << "From map: min_layer = " << min_layer << ", max_layer= " << max_layer << std::endl;
-  std::cout << "From map: min_ring = " << min_ring << ", max_ring= " << max_ring << std::endl;
-  std::cout << "From map: min_iphi = " << min_iphi << ", max_iphi= " << max_iphi << std::endl;
-
   // << HGCal mapping
 
   // get detector information 
@@ -193,56 +144,31 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   const HGCalGeometry *geo = static_cast<const HGCalGeometry*>(geom->getSubdetectorGeometry(DetId::HGCalHSc, ForwardSubdetector::ForwardEmpty));
 
   // find min max rings per layer from geometry and from map
-  std::vector<int> layervals {8,9,10,11,12,13,14,15,16,17,18,19,20,21,22};
-  for(auto lay: layervals){
-     std::cout << "Layer " << lay << std::endl;
-    std::vector<float> minmaxvals_geo = minMaxRingPerLayer(geo, lay);
-    std::cout << "Geo : min ring = " << minmaxvals_geo.at(0) << ", max ring = " << minmaxvals_geo.at(1) << std::endl;
+  // std::vector<int> layervals {8,9,10,11,12,13,14,15,16,17,18,19,20,21,22};
+  // for(auto lay: layervals){
+  //    std::cout << "Layer " << lay << std::endl;
+  //   std::vector<float> minmaxvals_geo = minMaxRingPerLayer(geo, lay, true);
+  //   std::cout << "Geo : min ring = " << minmaxvals_geo.at(0) << ", max ring = " << minmaxvals_geo.at(1) << std::endl;
+  //   std::vector<float> minmaxvals_geo_iphi = minMaxRingPerLayer(geo, lay, false);
+  //   std::cout << "      min iphi = " << minmaxvals_geo_iphi.at(0) << ", max iphi = " << minmaxvals_geo_iphi.at(1)
+  //             << std::endl;
 
-    std::vector<float> minmaxvals_map = minMaxRingPerLayer(sipm_geo2ele_, lay+1);
-    std::cout << "Map (lay+1) : min ring = " << minmaxvals_map.at(0) << ", max ring = " << minmaxvals_map.at(1) << std::endl;
-  }
+  //   std::vector<float> minmaxvals_map = minMaxRingPerLayer(sipm_geo2ele_, lay+1, true);
+  //   std::cout << "Map (lay+1) : min ring = " << minmaxvals_map.at(0) << ", max ring = " << minmaxvals_map.at(1) << std::endl;
+  //   std::vector<float> minmaxvals_map_iphi = minMaxRingPerLayer(sipm_geo2ele_, lay + 1, false);
+  //   std::cout << "              min iphi = " << minmaxvals_map_iphi.at(0)
+  //             << ", max iphi = " << minmaxvals_map_iphi.at(1) << std::endl;
+  // }
 
   // fill validDetId histogram for first event only
   if (eventsCount_==1){
     const auto &validDetIds = geo->getValidDetIds();
-    min_layer = 999;
-    max_layer = -9;
-    min_ring = 999;
-    max_ring = -9;
-    min_iphi = 999;
-    max_iphi = -9;
+
     for(const auto &didIt : validDetIds) {
-
       HGCScintillatorDetId detId(didIt.rawId());
-
       // Choose negative because current module locator set only for negative CE
-      if(detId.zside()>0) continue; // do only one side since symmetrical? 
-
-      //if (DEBUG) {
-      printDetIdBitValues(detId);
-      //}
-
-      int layer_detId = detId.layer();
-      if (layer_detId > max_layer) {
-        max_layer = layer_detId;
-      } else if (layer_detId < min_layer) {
-        min_layer = layer_detId;
-      }
-
-      int ring_detId = detId.ring();
-      if (ring_detId > max_ring) {
-        max_ring = ring_detId;
-      } else if (ring_detId < min_ring) {
-        min_ring = ring_detId;
-      }
-
-      int iphi_detId = detId.iphi();
-      if (iphi_detId > max_iphi) {
-        max_iphi = iphi_detId;
-      } else if (iphi_detId < min_iphi) {
-        min_iphi = iphi_detId;
-      }
+      if (detId.zside() > 0)
+        continue;  // do only one side since symmetrical?
 
       // tile info
       auto rawDetId = detId.rawId();
@@ -251,132 +177,56 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       int layer = detId.layer() + layerIdxOffset_;
       int layerDetId = detId.layer();
       int ring{detId.ring()};
-      int iradius {detId.iradius()};
-      int ieta {detId.ieta()};
-      int iphi {detId.iphi()};
+      int iradius{detId.iradius()};
+      int ieta{detId.ieta()};
+      int iphi{detId.iphi()};
       int trigger{detId.trigger()};
       int sipm{detId.sipm()};
 
-      //HGCScintillatorDetId detId3(detId.type(), detId.layer(), detId.ring(), detId.iphi(), detId.trigger(), detId.sipm());
-
-      // Fix bits in detId to agree with older geometry version stored in the map
-      // ------------------------------------------
-
-      std::cout << "==== Setting type bit to 0 ====" << std::endl;
-      // [26:27] Tile granularity and type (0 fine divisions of scintillators;
-      //                                    1 coarse divisions of type "c";
-      //                                    2 coarse divisions of type "m")
-
-      static const int kHGCalTypeOffset = 26;
-      static const int kHGCalTypeMask0 = 0xF3FFFFFF;
-      uint32_t rawDetId_typeMask0 = didIt.rawId();
-      std::cout << "rawDetId_typeMask0 before = " << rawDetId_typeMask0 << std::endl;
-      rawDetId_typeMask0 &= kHGCalTypeMask0;
-      std::cout << "rawDetId_typeMask0 after = " << rawDetId_typeMask0 << std::endl << std::endl;
-      HGCScintillatorDetId detId_fixTypeBit(rawDetId_typeMask0);
-      if(DEBUG) { printDetIdBitValues(detId_fixTypeBit); }
-
-      std::cout << "==== Setting sipm bit to 0 ====" << std::endl;
-      // [23]    SiPM type (0 for 2mm: 1 for 4mm)
-
-      static const int kHGCalSiPMOffset = 23;
-      static const int kHGCalSiPMMask0 = 0xFF7FFFFF;
-      uint32_t rawDetId_sipmMask0 = rawDetId_typeMask0;
-      std::cout << "rawDetId_sipmMask0 before = " << rawDetId_sipmMask0 << std::endl;
-      rawDetId_sipmMask0 &= kHGCalSiPMMask0;
-      std::cout << "rawDetId_sipmMask0 after = " << rawDetId_sipmMask0 << std::endl << std::endl;
-      HGCScintillatorDetId detId_fixSipmBit(rawDetId_sipmMask0);
-      if(DEBUG) { printDetIdBitValues(detId_fixSipmBit); }
-
-
-      std::cout << "==== Increase layer bit by 1 ====" << std::endl;
-      //  detId: min_layer = 8, max_layer= 21
-      //  map: min_layer = 9, max_layer= 22
-      //  [17:21] Layer
-
-      static const int kHGCalLayerOffset = 17;
-      static const int kHGCalLayerMask = 0x1F;
-      static const int kHGCalLayerMask0 = 0xFFC1FFFF;
-      uint32_t rawDetId_layerP1 = rawDetId_sipmMask0;
-      // Get layer bit: right shift by offset, select significant bits with mask 
-      int layerBits = (rawDetId_layerP1 >> kHGCalLayerOffset) & kHGCalLayerMask;
-      std::cout << "layerBits = " << layerBits << std::endl;
-      // Check it's correct
-      assert(layerBits == detId_fixSipmBit.layer());
-      // Increase by +1
-      layerBits++; 
-      std::cout << "layerBits+1 = " << layerBits << std::endl;
-      rawDetId_layerP1 &= kHGCalLayerMask0; // set relevant bits to 0
-      HGCScintillatorDetId detId_test(rawDetId_layerP1);
-      std::cout << " detId layer = " << detId_test.layer() << std::endl;
-      rawDetId_layerP1 |= ((layerBits & kHGCalLayerMask) << kHGCalLayerOffset); // OR with new bits 
-      HGCScintillatorDetId detId_fixLayerBit(rawDetId_layerP1);
-      if(DEBUG) { printDetIdBitValues(detId_fixLayerBit); }
-
-      std::cout << "==== Decrease radius bit by 1 ====" << std::endl;
-      //  [9:16]  |ring| index (starting from a minimum radius depending on type)
-      //  detId: min_ring = 1, max_ring= 42
-      //  map: min_ring = 0, max_ring= 41
-      static const int kHGCalRadiusOffset = 9;
-      static const int kHGCalRadiusMask = 0xFF;
-      static const int kHGCalRadiusMask0 = 0xFFFE01FF;
-      uint32_t rawDetId_radiusM1 = rawDetId_layerP1;
-      // Get layer bit: right shift by offset, select significant bits with mask
-      int radiusBits = (rawDetId_radiusM1 >> kHGCalRadiusOffset) & kHGCalRadiusMask;
-      std::cout << "radiusBits = " << radiusBits << std::endl;
-      // Check it's correct
-      assert(radiusBits == detId_fixLayerBit.ring());
-      // Decrease by -1
-      radiusBits--;
-      std::cout << "radiusBits-1 = " << radiusBits << std::endl;
-      rawDetId_radiusM1 &= kHGCalRadiusMask0;  // set relevant bits to 0
-      HGCScintillatorDetId detId_testradiusM1(rawDetId_radiusM1);
-      std::cout << " detId ring = " << detId_testradiusM1.ring() << std::endl;
-      rawDetId_radiusM1 |= ((radiusBits & kHGCalRadiusMask) << kHGCalRadiusOffset);  // OR with new bits
-      HGCScintillatorDetId detId_fixRadiusBit(rawDetId_radiusM1);
-      printDetIdBitValues(detId_fixRadiusBit);
-
-      //-------------------------------------------------------------
-
-      std::cout << "==== Get electronics ID from map ====" << std::endl;
-
-      try{    
-      std::cout << " sipm_geo2ele_.at(detId_fixRadiusBit.rawId()) " << sipm_geo2ele_.at(detId_fixRadiusBit.rawId()) << std::endl;
-      }
-      catch(...){
-        std::cout << "Could not find a match for detId: " << detId_fixRadiusBit.rawId() << std::endl;
-        continue;
-      }
-
       h_cellCount_->Fill(layer);
-
       // find its tileboar
-      for ( const auto &[tb_name, tb] : HGCTileBoards::tb_map ) {
-        if (layer!=tb.plane) { continue; } // the detIds taken from geo are numbered correctly
-        if ((iradius>tb.irmin)&&(iradius<tb.irmax)) {          
-          // std::cout << "entered for layer " << tb.plane << ", iradius= " << iradius 
-          //       << ", ieta= " << ieta 
-          //       << ", iphi= " << iphi << std::endl;
+      for (const auto &[tb_name, tb] : HGCTileBoards::tb_map) {
+        if (layer != tb.plane) {
+          continue;
+        }  // the detIds taken from geo are numbered correctly
+        if ((iradius > tb.irmin) && (iradius < tb.irmax)) {
           b_tboard_ValidDetIds_.at(tb_name) += 1;
           break;
         }
       }
-    }
-    std::cout << "From detId: min_layer = " << min_layer << ", max_layer= " << max_layer << std::endl;
-    std::cout << "From detId: min_ring = " << min_ring << ", max_ring= " << max_ring << std::endl;
-    std::cout << "From detId: min_iphi = " << min_iphi << ", max_iphi= " << max_iphi << std::endl;
-
-    // store values 
-    // for ( const auto &[tb_name, tb] : HGCTileBoards::tb_map ) {
-    //   tb.nValidDetIds = b_tboard_ValidDetIds_.at(tb_name) / 36;
-    // }
-  }
-  else{ 
-    if (eventsCount_%100==0){
+    }    
+  } else {
+    if (eventsCount_ % 100 == 0) {
       std::cout << "Event " << eventsCount_ << std::endl;
-      }
+    }
   }
   std::cout << "Event " << eventsCount_ << std::endl;
+
+  //////////////////////////////////////////////////////////
+  // Do mapping stuff (currently not usable) ------->
+  if (eventsCount_ == 1) {
+    const auto &validDetIds = geo->getValidDetIds();
+
+    for (const auto &didIt : validDetIds) {
+      HGCScintillatorDetId detId(didIt.rawId());
+
+      // Choose negative because current module locator set only for negative CE
+      if (detId.zside() > 0) {
+        continue;  // do only one side since symmetrical
+      }
+      uint32_t rawEleID = getRawEleIdFromMap(detId);
+      if (rawEleID == 0) {
+        continue;
+      }
+      HGCalElectronicsId eleID(rawEleID);
+      printEleIdBitValues(eleID);
+
+    }
+  }
+  //////////////////////////////////////////////////////////
+  // <------- Do mapping stuff
+
+
   // analyze digi collections
   edm::Handle<HGCalDigiCollection> digisHandle;
   iEvent.getByToken(digisCEH_, digisHandle);
@@ -395,7 +245,15 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     }
   }
 
-  // fill profile histograms per layer
+  // Divide hits per tileboard by 360/10=36 to remove repetition in phi
+  for (const auto &[tb_name, tb] : HGCTileBoards::tb_map) {
+    b_tboard_ToaHits_.at(tb_name) /= 36;
+    b_tboard_TdcHits_.at(tb_name) /= 36;
+    b_tboard_AdcHits_.at(tb_name) /= 36;
+    b_tboard_ValidDetIds_.at(tb_name) /= 36;
+  }
+
+  // fill profile histograms per layer (profiles are averages, so no phi redundancy)
   totalADCHits_ = 0;
   for(size_t layIdx=0; layIdx<layerTdcHits_.size(); layIdx++){
     int layer = layIdx; 
@@ -416,10 +274,14 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   h_adcHitsVsPU_->Fill(b_npu_,totalADCHits_, 1); 
 
 
-  // fill 2D tiles histograms
+  // removing phi redundancy from tiles hits and fill 2D tiles histograms
   for(size_t layIdx=0; layIdx<tileTdcHits_.size(); layIdx++){
     for(size_t rinIdx=0; rinIdx<tileTdcHits_[0].size(); rinIdx++){
       int layer = layIdx;
+      tileTdcHits_.at(layIdx).at(rinIdx) /= 36;
+      tileToaHits_.at(layIdx).at(rinIdx) /= 36;
+      tileAdcHits_.at(layIdx).at(rinIdx) /= 36;
+
       if (DEBUG) {
         std::cout << "Filling 2D tiles histograms:" 
                   << " layIdx = " << layIdx 
@@ -429,7 +291,6 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
                   << ", tileAdcHits_" << tileAdcHits_.at(layIdx).at(rinIdx)
                   << std::endl;
       }
-
       h2_tdcCount_->Fill(layer,rinIdx,tileTdcHits_.at(layer).at(rinIdx));
       h2_toaCount_->Fill(layer,rinIdx,tileToaHits_.at(layIdx).at(rinIdx));
       h2_adcCount_->Fill(layer,rinIdx,tileAdcHits_.at(layIdx).at(rinIdx));
@@ -440,21 +301,18 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     for ( const auto &mpair : HGCTileBoards::tb_map ) {
       std::cout << mpair.first;
       std::string tb_name = mpair.first;
-      // std::cout << ", b_tboard_TdcHits_ " << b_tboard_TdcHits_.at(tb_name);
-      // std::cout << ", b_tboard_ToaHits_ " << b_tboard_ToaHits_.at(tb_name);
-      // std::cout << ", b_tboard_AdcHits_ " << b_tboard_AdcHits_.at(tb_name) << std::endl;
+      std::cout << ", b_tboard_TdcHits_ " << b_tboard_TdcHits_.at(tb_name);
+      std::cout << ", b_tboard_ToaHits_ " << b_tboard_ToaHits_.at(tb_name);
+      std::cout << ", b_tboard_AdcHits_ " << b_tboard_AdcHits_.at(tb_name) << std::endl;
     }
   }
    
-  // fill tree for each event
-  t_events_->Fill();
+  // fill info tree with constant information only once
   if (eventsCount_==1){
     t_info_->Fill(); 
-  //    for ( const auto &mpair : HGCTileBoards::tb_map ) {
-  //   std::string tb_name = mpair.first;    
-  //   std::cout<< tb_name << " b_tboard_ValidDetIds_ = " << b_tboard_ValidDetIds_.at(tb_name) << std::endl;          
-  // }
   }
+  // fill events tree for each event
+  t_events_->Fill();
 }
 
 void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, const HGCalGeometry *geom)
@@ -500,8 +358,6 @@ void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, 
     bool isTOA{hit.sample(inTimeSample).getToAValid()};
     bool isTDC{hit.sample(inTimeSample).mode()};
     bool isBusy{isTDC && rawData==0};
-    //uint32_t thr{std::floor(mipADC*adcThrMIP_)};
-    //bool passThr{isTDC||rawData>thr};
    
     // Find corresponding tileboard and fill vectors
     for ( const auto &[tb_name, tb] : HGCTileBoards::tb_map ) {
@@ -539,16 +395,6 @@ void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, 
         }
     }   
   }
-
-  // Divide hits per tileboard by 360/10=36 to remove repetition in phi
-  // Actually iphi range is 1-288, so I will divide by 28.8
-  //  for ( const auto &[tb_name, tb] : HGCTileBoards::tb_map ) {
-  //     std::cout << "Before: " << b_tboard_ToaHits_.at(tb_name) << std::endl;
-  //       b_tboard_ToaHits_.at(tb_name) /= 36; //28.8; //36;
-  //       b_tboard_TdcHits_.at(tb_name) /= 36; //28.8; //36;
-  //       b_tboard_AdcHits_.at(tb_name) /= 36; //28.8; //36;       
-  //       std::cout << "After: " << b_tboard_ToaHits_.at(tb_name) << std::endl;   
-  //   }
 
 }
 
@@ -671,7 +517,22 @@ void HGCScintAnalyzer::printDetIdBitValues(HGCScintillatorDetId &detId) {
             << std::endl;
 }
 
-std::vector<float> HGCScintAnalyzer::minMaxRingPerLayer(const HGCalGeometry *geo, int layer) {
+void HGCScintAnalyzer::printEleIdBitValues(HGCalElectronicsId &eleId) {
+  std::cout << "raw: " << eleId.raw() 
+            << ", zSide: " << eleId.zSide()
+            << ", localFEDId: " << (uint32_t)eleId.localFEDId() 
+            << ", captureBlock: " << (uint32_t)eleId.captureBlock()
+            << ", econdIdx: " << (uint32_t)eleId.econdIdx() 
+            << ", econdeRx: " << (uint32_t)eleId.econdeRx()
+            << ", halfrocChannel: " << (uint32_t)eleId.halfrocChannel() 
+            << ", rocChannel: " << (uint32_t)eleId.rocChannel()
+            << ", cmWord: " << (uint32_t)eleId.cmWord() 
+            << ", isCM: " << eleId.isCM() << std::endl; // "common mode"? Four dedicated cells for measuring electronics common mode noise?
+  std::cout << "   Print from module: "  << std::endl;
+  //eleId.print();
+}
+
+std::vector<float> HGCScintAnalyzer::minMaxRingPerLayer(const HGCalGeometry *geo, int layer, bool compareRing) {
   const auto &validDetIds = geo->getValidDetIds();
   int min_ring = 999;
   int max_ring = -9;
@@ -686,7 +547,10 @@ std::vector<float> HGCScintAnalyzer::minMaxRingPerLayer(const HGCalGeometry *geo
     if (detId.layer() != layer)
       continue;
 
-    int ring = detId.ring();
+    int ring;
+    if(compareRing){ ring = detId.ring();}
+    else{ ring = detId.iphi();}
+
     if (ring > max_ring) {
       max_ring = ring;
     } else if (ring < min_ring) {
@@ -699,7 +563,7 @@ std::vector<float> HGCScintAnalyzer::minMaxRingPerLayer(const HGCalGeometry *geo
   return ringvals;
 }
 
-std::vector<float> HGCScintAnalyzer::minMaxRingPerLayer(std::map<uint32_t, uint32_t> sipm_geo2ele_, int layer){
+std::vector<float> HGCScintAnalyzer::minMaxRingPerLayer(std::map<uint32_t, uint32_t> sipm_geo2ele_, int layer, bool compareRing){
   int min_ring = 999;
   int max_ring = -9;
   std::vector<float> ringvals(2);
@@ -709,8 +573,10 @@ std::vector<float> HGCScintAnalyzer::minMaxRingPerLayer(std::map<uint32_t, uint3
       continue;
     if (detId.zside() > 0)
       continue;
+    int ring;
+    if(compareRing){ ring = detId.ring();}
+    else{ ring = detId.iphi();}
 
-    int ring = detId.ring();
     if (ring > max_ring) {
       max_ring = ring;
     } else if (ring < min_ring) {
@@ -720,6 +586,136 @@ std::vector<float> HGCScintAnalyzer::minMaxRingPerLayer(std::map<uint32_t, uint3
   ringvals[0] = min_ring;
   ringvals[1] = max_ring;
   return ringvals;
+}
+
+// Fix bits in detId to agree with older geometry version stored in the map
+uint32_t HGCScintAnalyzer::getRawEleIdFromMap(HGCScintillatorDetId didIt) {
+  //if (DEBUG) {
+  printDetIdBitValues(didIt);
+  //}
+
+  // ------------------------------------------
+
+  if (DEBUG) { std::cout << "==== Setting type bit to 0 ====" << std::endl; }
+  // [26:27] Tile granularity and type (0 fine divisions of scintillators;
+  //                                    1 coarse divisions of type "c";
+  //                                    2 coarse divisions of type "m")
+  static const int kHGCalTypeOffset = 26;
+  static const int kHGCalTypeMask0 = 0xF3FFFFFF;
+  uint32_t rawDetId_typeMask0 = didIt.rawId();
+  if (DEBUG) { std::cout << "rawDetId_typeMask0 before = " << rawDetId_typeMask0 << std::endl; }
+  rawDetId_typeMask0 &= kHGCalTypeMask0;
+  if (DEBUG) {
+    std::cout << "rawDetId_typeMask0 after = " << rawDetId_typeMask0 << std::endl << std::endl;
+  }
+  HGCScintillatorDetId detId_fixTypeBit(rawDetId_typeMask0);
+  if (DEBUG) {
+    printDetIdBitValues(detId_fixTypeBit);
+  }
+
+  if (DEBUG) {
+    std::cout << "==== Setting sipm bit to 0 ====" << std::endl;
+  }
+  // [23]    SiPM type (0 for 2mm: 1 for 4mm)
+  static const int kHGCalSiPMOffset = 23;
+  static const int kHGCalSiPMMask0 = 0xFF7FFFFF;
+  uint32_t rawDetId_sipmMask0 = rawDetId_typeMask0;
+  if (DEBUG) {
+    std::cout << "rawDetId_sipmMask0 before = " << rawDetId_sipmMask0 << std::endl;
+  }
+  rawDetId_sipmMask0 &= kHGCalSiPMMask0;
+  if (DEBUG) {
+    std::cout << "rawDetId_sipmMask0 after = " << rawDetId_sipmMask0 << std::endl << std::endl;
+  }
+  HGCScintillatorDetId detId_fixSipmBit(rawDetId_sipmMask0);
+  if (DEBUG) {
+    printDetIdBitValues(detId_fixSipmBit);
+  }
+
+  if (DEBUG) {
+    std::cout << "==== Increase layer bit by 1 ====" << std::endl;
+  }
+  //  detId: min_layer = 8, max_layer= 21
+  //  map: min_layer = 9, max_layer= 22
+  //  [17:21] Layer
+  static const int kHGCalLayerOffset = 17;
+  static const int kHGCalLayerMask = 0x1F;
+  static const int kHGCalLayerMask0 = 0xFFC1FFFF;
+  uint32_t rawDetId_layerP1 = rawDetId_sipmMask0;
+  // Get layer bit: right shift by offset, select significant bits with mask
+  int layerBits = (rawDetId_layerP1 >> kHGCalLayerOffset) & kHGCalLayerMask;
+  if (DEBUG) {
+    std::cout << "layerBits = " << layerBits << std::endl;
+  }
+  // Check it's correct
+  assert(layerBits == detId_fixSipmBit.layer());
+  // Increase by +1
+  layerBits++;
+  if (DEBUG) {
+    std::cout << "layerBits+1 = " << layerBits << std::endl;
+  }
+  rawDetId_layerP1 &= kHGCalLayerMask0;  // set relevant bits to 0
+  HGCScintillatorDetId detId_test(rawDetId_layerP1);
+  if (DEBUG) {
+    std::cout << " detId layer = " << detId_test.layer() << std::endl;
+  }
+  rawDetId_layerP1 |= ((layerBits & kHGCalLayerMask) << kHGCalLayerOffset);  // OR with new bits
+  HGCScintillatorDetId detId_fixLayerBit(rawDetId_layerP1);
+  if (DEBUG) {
+    printDetIdBitValues(detId_fixLayerBit);
+  }
+
+  if (DEBUG) {
+    std::cout << "==== Decrease radius bit by 1 ====" << std::endl;
+  }
+  //  [9:16]  |ring| index (starting from a minimum radius depending on type)
+  //  detId: min_ring = 1, max_ring= 42
+  //  map: min_ring = 0, max_ring= 41
+  static const int kHGCalRadiusOffset = 9;
+  static const int kHGCalRadiusMask = 0xFF;
+  static const int kHGCalRadiusMask0 = 0xFFFE01FF;
+  uint32_t rawDetId_radiusM1 = rawDetId_layerP1;
+  // Get layer bit: right shift by offset, select significant bits with mask
+  int radiusBits = (rawDetId_radiusM1 >> kHGCalRadiusOffset) & kHGCalRadiusMask;
+  if (DEBUG) {
+    std::cout << "radiusBits = " << radiusBits << std::endl;
+  }
+  // Check it's correct
+  assert(radiusBits == detId_fixLayerBit.ring());
+  // Decrease by -1
+  radiusBits--;
+  if (DEBUG) {
+    std::cout << "radiusBits-1 = " << radiusBits << std::endl;
+  }
+  rawDetId_radiusM1 &= kHGCalRadiusMask0;  // set relevant bits to 0
+  HGCScintillatorDetId detId_testradiusM1(rawDetId_radiusM1);
+  if (DEBUG) {
+    std::cout << " detId ring = " << detId_testradiusM1.ring() << std::endl;
+  }
+  rawDetId_radiusM1 |= ((radiusBits & kHGCalRadiusMask) << kHGCalRadiusOffset);  // OR with new bits
+  HGCScintillatorDetId detId_fixRadiusBit(rawDetId_radiusM1);
+  if (DEBUG){
+    printDetIdBitValues(detId_fixRadiusBit);
+  }
+
+  if (DEBUG) { 
+    std::cout << "==== Get electronics ID from map ====" << std::endl;
+  }
+
+  uint32_t rawEleID = 0;
+  try {
+    if (DEBUG)
+      std::cout << " sipm_geo2ele_.at(detId_fixRadiusBit.rawId()) " << sipm_geo2ele_.at(detId_fixRadiusBit.rawId())
+                << std::endl;
+    rawEleID = sipm_geo2ele_.at(detId_fixRadiusBit.rawId());
+    //HGCalElectronicsId eleID(rawEleID);
+    
+  } catch (...) {
+    std::cout << "Could not find a match for detId: " << detId_fixRadiusBit.rawId() << std::endl;
+    //continue;
+  }
+
+  return rawEleID;
 }
 
 // ------------ method called once each job just after ending the event loop  ------------
