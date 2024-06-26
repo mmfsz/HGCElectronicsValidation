@@ -30,6 +30,9 @@
 // system include files
 #include <memory>
 
+
+
+
 HGCScintAnalyzer::HGCScintAnalyzer(const edm::ParameterSet &iConfig)
     : puToken_(consumes<std::vector<PileupSummaryInfo>>(edm::InputTag("addPileupInfo"))),
       caloGeomToken_(esConsumes<CaloGeometry, CaloGeometryRecord>()),
@@ -40,11 +43,14 @@ HGCScintAnalyzer::HGCScintAnalyzer(const edm::ParameterSet &iConfig)
       moduleTkn_(esConsumes())
 
 {
-  // do what ever initialization is needed
+  // do whatever initialization is needed
 
     edm::Service<TFileService> fs;
 
-    // TTree
+    // Open output stream file
+    ofStreamECONDHitsFile_.open("outputECONDHits.txt");
+
+    // TTrees
     t_events_ = fs->make<TTree>("Events","Events");
     t_info_ = fs->make<TTree>("Info","Info"); // information that does not change between events
 
@@ -59,19 +65,35 @@ HGCScintAnalyzer::HGCScintAnalyzer(const edm::ParameterSet &iConfig)
         t_events_->Branch(rs_tb_name + "_adcOcc", &b_tboard_AdcOcc_[tb_name], rs_tb_name + "_adcOcc/I");
     }
 
-    // histograms
+    
+    // Histograms
     //h_validDetIds_=fs->make<TH1F>("validDetIds",";Layer;Number of valid detIDs/layer",50,0.5,50.5);
     h_cellCount_=fs->make<TH1F>("cellcount",";Layer;Number of cells/layer",50,0.5,50.5);
+    h_adcHitsVsPU_=fs->make<TH2F>("adchitsvspu",";Number of PU interactions; Number of ADC hits",100,100,300,1000,0,4000); 
     h_tdcCountProf_=fs->make<TProfile>("tdccount",";Layer;Number of hits/layer",50,0.5,50.5);
     h_toaCountProf_=fs->make<TProfile>("toacount",";Layer;Number of hits/layer",50,0.5,50.5);
     h_adcCountProf_=fs->make<TProfile>("adccount",";Layer;Number of hits/layer",50,0.5,50.5);
-
-    h_adcHitsVsPU_=fs->make<TH2F>("adchitsvspu",";Number of PU interactions; Number of ADC hits",100,100,300,1000,0,4000); 
 
     h2_tdcCount_=fs->make<TProfile2D>("tdccount2D",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
     h2_toaCount_=fs->make<TProfile2D>("toacount2D",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
     h2_adcCount_=fs->make<TProfile2D>("adccount2D",";Layer;Ring",50,0.5,50.5,42,0.5,42.5);
 
+    for (int i = 0; i < 50; ++i) {
+      TString layer = std::to_string(i);
+      if(i>6 && i <23){
+        hlistXYhits_HECback[i] = fs->make<TH2D>("hXYhits_HECback_L" + layer, "Hits in XY", 100, -50., 50., 100, -50., 50.);
+        hlistGlobalXYhits_HECback[i] = fs->make<TH2D>("hGlobXYhits_HECback_L" + layer, "Hits in global XY", 600, -300., 300., 600, -300., 300.);
+        hlistXYhits_HECback_Sipm2mm[i] = fs->make<TH2D>("hXYhits_HECback_Sipm2mm_L" + layer, "Hits in XY", 100, -50., 50., 100, -50., 50.);
+        hlistGlobalXYhits_HECback_Sipm2mm[i] = fs->make<TH2D>("hGlobXYhits_HECback_Sipm2mm_L" + layer, "Hits in XY",600, -300., 300., 600, -300., 300.);
+        hlistXYhits_HECback_Sipm4mm[i] = fs->make<TH2D>("hXYhits_HECback_Sipm4mm_L" + layer, "Hits in XY", 100, -50., 50., 100, -50., 50.);
+        hlistGlobalXYhits_HECback_Sipm4mm[i] = fs->make<TH2D>("hGlobXYhits_HECback_Sipm4mm_L" + layer, "Hits in XY",600, -300., 300., 600, -300., 300.);
+        hlistXYhits_HECback_detIdMiss[i] = fs->make<TH2D>("hXYhits_HECback_detIdMissingFromMap_L" + layer, "Hits in XY", 100, -50., 50., 100, -50., 50.);
+        hlistGlobalXYhits_HECback_detIdMiss[i] = fs->make<TH2D>("hGlobXYhits_HECback_detIdMissingFromMap_L" + layer, "Hits in XY", 600, -300., 300., 600, -300., 300.);
+        hlistXYhits_HECback_polar[i] = fs->make<TH2D>("hRPhiHits_HECback_polar_L" + layer, "Hits in iring phi", 288, 0, 360, 50, 0., 50.);
+      }
+    }
+
+    // Vectors
     layerTdcHits_.resize(Nlayers_,0);
     layerToaHits_.resize(Nlayers_,0);
     layerAdcHits_.resize(Nlayers_,0);
@@ -91,20 +113,15 @@ HGCScintAnalyzer::~HGCScintAnalyzer() {
     // please remove this method altogether if it would be left empty
 }
 
-
 // ------------ method called once each job just before starting event loop  ------------
 void HGCScintAnalyzer::beginJob() {}
-
-//
-// member functions
-//
 
 // ------------ method called for each event  ------------
 void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) 
 {
   eventsCount_++;
   using namespace edm;
-
+  
   // reset global counters
   std::fill(layerTdcHits_.begin(), layerTdcHits_.end(), 0);
   std::fill(layerToaHits_.begin(), layerToaHits_.end(), 0);
@@ -129,6 +146,11 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   // >>
   //get cell indexers and SoA
   auto cellIdx = iSetup.getData(cellIndexTkn_);
+  for (size_t idx = 0; idx < cellIdx.di_.size(); idx++) {
+    //check typecode exists
+    auto typecode = cellIdx.getTypecodeFromEnum(idx);
+    std::cout << "typecode.c_str() = " << typecode.c_str() << std::endl;
+  }
   auto const &cells = iSetup.getData(cellTkn_);
   printf("[HGCScintAnalyzer][analyze] Cell dense indexers and associated SoA retrieved for HGCAL\n");
   int nmodtypes = cellIdx.typeCodeIndexer_.size();
@@ -136,12 +158,16 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   //get the module mapper SoA
   auto const &modules = iSetup.getData(moduleTkn_);
   sipm_geo2ele_ = this->mapGeoToElectronics(modules, cells, true, true);
-  //sipm_ele2geo_ = this->mapGeoToElectronics(modules, cells, false, true);
+  sipm_ele2geo_ = this->mapGeoToElectronics(modules, cells, false, true);
   // << HGCal mapping
 
   // get detector information 
   edm::ESHandle<CaloGeometry> geom = iSetup.getHandle(caloGeomToken_);
   const HGCalGeometry *geo = static_cast<const HGCalGeometry*>(geom->getSubdetectorGeometry(DetId::HGCalHSc, ForwardSubdetector::ForwardEmpty));
+
+  // for rechittools
+  const CaloGeometry &geomCalo = iSetup.getData(caloGeomToken_);
+  rhtools_.setGeometry(geomCalo);
 
   // find min max rings per layer from geometry and from map
   // std::vector<int> layervals {8,9,10,11,12,13,14,15,16,17,18,19,20,21,22};
@@ -160,10 +186,11 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   //             << ", max iphi = " << minmaxvals_map_iphi.at(1) << std::endl;
   // }
 
-  // fill validDetId histogram for first event only
+  
+
+  // Fill validDetId histogram for first event only
   if (eventsCount_==1){
     const auto &validDetIds = geo->getValidDetIds();
-
     for(const auto &didIt : validDetIds) {
       HGCScintillatorDetId detId(didIt.rawId());
       // Choose negative because current module locator set only for negative CE
@@ -186,43 +213,120 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       h_cellCount_->Fill(layer);
       // find its tileboar
       for (const auto &[tb_name, tb] : HGCTileBoards::tb_map) {
-        if (layer != tb.plane) {
+        if (layer != tb.plane) {  // the detIds taken from geo are numbered correctly
           continue;
-        }  // the detIds taken from geo are numbered correctly
+        }
         if ((iradius > tb.irmin) && (iradius < tb.irmax)) {
           b_tboard_ValidDetIds_.at(tb_name) += 1;
           break;
         }
       }
-    }    
-  } else {
-    if (eventsCount_ % 100 == 0) {
-      std::cout << "Event " << eventsCount_ << std::endl;
-    }
-  }
-  std::cout << "Event " << eventsCount_ << std::endl;
+    
 
-  //////////////////////////////////////////////////////////
-  // Do mapping stuff (currently not usable) ------->
-  if (eventsCount_ == 1) {
-    const auto &validDetIds = geo->getValidDetIds();
+      //
+      // Get number of HGCROC channels per ECON-D and also set the keys in the ECOND map
 
-    for (const auto &didIt : validDetIds) {
-      HGCScintillatorDetId detId(didIt.rawId());
-
-      // Choose negative because current module locator set only for negative CE
-      if (detId.zside() > 0) {
-        continue;  // do only one side since symmetrical
-      }
       uint32_t rawEleID = getRawEleIdFromMap(detId);
+      // if rawEleID==0, it means the detId was not found in the map. Skip this detId for now. //FIXME
       if (rawEleID == 0) {
         continue;
       }
       HGCalElectronicsId eleID(rawEleID);
-      printEleIdBitValues(eleID);
-
+      EconDType key = std::make_tuple(eleID.zSide(), eleID.localFEDId(), eleID.captureBlock(), eleID.econdIdx());
+      uint32_t econdeRxValue = eleID.econdeRx() + 1;  // eRx start from 0
+      if (EcondInfoMap_.find(key) == EcondInfoMap_.end()) {
+        EcondInfoMap_[key].nHalfROCS = econdeRxValue;
+      } else {
+        if (econdeRxValue > EcondInfoMap_[key].nHalfROCS) {
+          EcondInfoMap_[key].nHalfROCS = econdeRxValue;
+        }
+      }
     }
+
+    // Output unique ECOND indices
+    if (outputECONDFile) {
+      ofStreamECONDHitsFile_ << "zSide localFEDId captureBlock econdIdx nHalfROCS" << std::endl;
+      for (const auto &entry : EcondInfoMap_) {
+        ofStreamECONDHitsFile_ << std::get<0>(entry.first) << " " << std::get<1>(entry.first) << " "
+                            << std::get<2>(entry.first) << " " << std::get<3>(entry.first) << " "
+                            << entry.second.nHalfROCS << std::endl;
+      }
+      ofStreamECONDHitsFile_ << std::endl << std::endl << std::endl;
+    }
+
+  } else {
+    // if (eventsCount_ % 100 == 0) {
+    //   std::cout << "Event " << eventsCount_ << std::endl;
+    // }
   }
+  std::cout << "Event " << eventsCount_ << std::endl;
+  if (outputECONDFile) { 
+    ofStreamECONDHitsFile_ << "Event " << eventsCount_ << std::endl;
+  }
+
+  //////////////////////////////////////////////////////////
+  // Do mapping stuff 
+  // if (eventsCount_ == 1) {
+  //   const auto &validDetIds = geo->getValidDetIds();
+
+  //   for (const auto &didIt : validDetIds) {
+  //     HGCScintillatorDetId detId(didIt.rawId());
+
+  //     // Choose negative because current module locator set only for negative CE
+  //     if (detId.zside() > 0) {
+  //       continue;  // do only one side since symmetrical
+  //     }
+  //     uint32_t rawEleID = getRawEleIdFromMap(detId);
+  //     if (rawEleID == 0) {
+  //       continue;
+  //     }
+  //     HGCalElectronicsId eleID(rawEleID);
+  //     printEleIdBitValues(eleID);
+
+  //   }
+  // }
+
+  // HitsEleMap ACDhitsMap;
+  // for (const auto &pair : sipm_ele2geo_) {
+  //   HGCalElectronicsId eleID(pair.first);
+  //   if (eleID.zSide() > 0)
+  //     continue;
+
+  //   printEleIdBitValues(eleID);
+  //   EconDType key = std::make_tuple(eleID.zSide(), eleID.localFEDId(), eleID.captureBlock(), eleID.econdIdx());
+  //   // Update the map: if the key exists, add 1 to the value, otherwise insert it with value 1
+  //   ACDhitsMap[key] += 1;
+  // }
+
+  // std::cout << "From map:" << std::endl;
+  // for (const auto &entry : ACDhitsMap) {
+  //   const auto &key = entry.first;
+  //   const auto &value = entry.second;
+  //   std::cout << "Key: (" << std::get<0>(key) << ", " << std::get<1>(key) << ", " << std::get<2>(key) << ", "
+  //             << std::get<3>(key) << "), ";
+  //   std::cout << "Value: " << value << std::endl;
+  // }
+
+  // Get number of HGCROC channels per ECON-D
+  // Map to store the maximum rocChannel for each unique set
+  // std::map<std::tuple<int, int, int, int>, uint8_t> nHalfRocsEcondMap;
+  // for (const auto &pair : sipm_ele2geo_) {
+  //   HGCalElectronicsId eleID(pair.first);
+  //   if (eleID.zSide() > 0)
+  //     continue;
+  //   auto key = std::make_tuple(eleID.zSide(), eleID.localFEDId(), eleID.captureBlock(), eleID.econdIdx());
+  //   if (nHalfRocsEcondMap.find(key) == nHalfRocsEcondMap.end()) {
+  //     nHalfRocsEcondMap[key] = eleID.econdeRx();
+  //   } else {
+  //     nHalfRocsEcondMap[key] = std::max(nHalfRocsEcondMap[key], eleID.econdeRx());
+  //   }
+  // }
+  // // Output the results
+  // for (const auto &entry : nHalfRocsEcondMap) {
+  //   std::cout << "zSide: " << std::get<0>(entry.first) << ", localFEDId: " << std::get<1>(entry.first)
+  //             << ", captureBlock: " << std::get<2>(entry.first) << ", econdIdx: " << std::get<3>(entry.first)
+  //             << ", max rocChannel: " << static_cast<int> (entry.second) << std::endl;
+  // }
   //////////////////////////////////////////////////////////
   // <------- Do mapping stuff
 
@@ -230,7 +334,7 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   // analyze digi collections
   edm::Handle<HGCalDigiCollection> digisHandle;
   iEvent.getByToken(digisCEH_, digisHandle);
-  analyzeDigis(digisHandle,geo);
+  analyzeDigis(digisHandle, geo);
 
   // get pileup information 
   edm::Handle<std::vector<PileupSummaryInfo>> PupInfo;
@@ -315,18 +419,15 @@ void HGCScintAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   t_events_->Fill();
 }
 
-void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, const HGCalGeometry *geom)
-{
+void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl,
+                                    const HGCalGeometry *geom ) {
   // check inputs
   if(!digiColl.isValid() || geom==NULL){
  	  std::cout << "HGCScintAnalyzer::analyzeDigis: digicoll not valid or no geom. Returning." << std::endl;
-	   return;	
+	  return;	
   }
 
-
-
-  const int inTimeSample{2}; // in-time BX sample
-
+  const int inTimeSample{2}; // in-time BX
 
   for(auto &hit : *digiColl){
     if(hit.size()==0) continue;
@@ -334,9 +435,10 @@ void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, 
     HGCScintillatorDetId detId{hit.id()};
     auto rawDetId = detId.rawId();
 
+    // take negative side of detector bc ModuleLocator currently setup for z<0 only
     if(detId.zside()>0) continue; // make sure same as inside analysis()
 
-    // tile info
+    // detId info
     int layer{detId.layer()+layerIdxOffset_};
     int iradiusAbs{detId.iradiusAbs()};
     int iradius{detId.iradius()};
@@ -344,28 +446,62 @@ void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, 
     int ieta{detId.ieta()};
     int iphi{detId.iphi()};
 
+    float phi = iphi * 1.25;         //phi in degrees
+    float theta = phi * M_PI / 180;  // phi in radians
+    float x = iradiusAbs * cos(theta);
+    float y = iradiusAbs * sin(theta);
+    GlobalPoint global = rhtools_.getPosition(detId);
+    float xglob = global.x();
+    float yglob = global.y();
+    //hlistXYhits_HECback.at(detId.layer())->Fill(x, y);
+    hlistXYhits_HECback[detId.layer()]->Fill(x, y);
+    hlistGlobalXYhits_HECback[detId.layer()]->Fill(xglob, yglob);
+    hlistXYhits_HECback_polar[detId.layer()]->Fill(phi, iradiusAbs);
+
     if (DEBUG) {
-      std::cout << "layer: " << layer 
-                << ", iradiusAbs: " << iradiusAbs
-                << ", iradius: " << iradius
-                << ", ietaAbs: " << ietaAbs
-                << ", ieta: " << ieta
-                << ", iphi: " << iphi << std::endl;
+      std::cout << "layer: " << layer << "detId.layer(): " << detId.layer() << ", iradiusAbs: " << iradiusAbs
+                << ", iradius: " << iradius << ", ietaAbs: " << ietaAbs << ", ieta: " << ieta << ", iphi: " << iphi
+                << std::endl;
+    }
+    if (!detId.sipm()) {
+      hlistXYhits_HECback_Sipm4mm[detId.layer()]->Fill(x, y);
+      hlistGlobalXYhits_HECback_Sipm4mm[detId.layer()]->Fill(xglob, yglob);
+    } else {
+      hlistXYhits_HECback_Sipm2mm[detId.layer()]->Fill(x, y);
+      hlistGlobalXYhits_HECback_Sipm2mm[detId.layer()]->Fill(xglob, yglob);
     }
 
     // in-time BX info
     uint32_t rawData{hit.sample(inTimeSample).data()};
     bool isTOA{hit.sample(inTimeSample).getToAValid()};
     bool isTDC{hit.sample(inTimeSample).mode()};
-    bool isBusy{isTDC && rawData==0};
-   
+    bool isBusy{isTDC && rawData == 0};
+
+    //BX-1 info
+    uint32_t rawDataBXm1(hit.sample(inTimeSample - 1).data());
+    bool isTDCBXm1(hit.sample(inTimeSample - 1).mode());
+    bool isTOAbxm1(hit.sample(inTimeSample - 1).getToAValid());
+    bool passBXM1 = false;
+    // FIX ME: how to get mipADC from noise map?
+    // >>
+    // if (thisdigi[bx - 1].mode() || (thisdigi[bx - 1].data() > std::floor(mipADC * 2.5))) {
+    //   passBXM1 = true;
+    // }
+    // <<
+    float thrbxm1 = 10;  // FIXME!!!
+    if (isTDCBXm1 || rawDataBXm1 > thrbxm1) {
+      passBXM1 = true;
+    }
+
     // Find corresponding tileboard and fill vectors
-    for ( const auto &[tb_name, tb] : HGCTileBoards::tb_map ) {
+    for (const auto &[tb_name, tb] : HGCTileBoards::tb_map) {
       // check if tile is in the same layer
-      if (layer!=tb.plane) { continue; }
+      if (layer != tb.plane) {
+        continue;
+      }
       if (DEBUG) {
         std::cout << "tb_name: " << tb_name << std::endl;
-        std::cout << "layer = " << tb.plane << ", tb.irmin = " << tb.irmin << ", tb.irmax = " << tb.irmax<< std::endl;
+        std::cout << "layer = " << tb.plane << ", tb.irmin = " << tb.irmin << ", tb.irmax = " << tb.irmax << std::endl;
       }
       // check if tile is in the same radius range
       if ((iradius>tb.irmin)&&(iradius<tb.irmax)) {
@@ -377,7 +513,6 @@ void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, 
         break;
       }
     }
-
 
     int layidx = layer; //-1;
     if (!isBusy) {
@@ -393,7 +528,47 @@ void HGCScintAnalyzer::analyzeDigis(edm::Handle<HGCalDigiCollection> &digiColl, 
             layerAdcHits_[layidx]+=1;
             tileAdcHits_[layidx][iradiusAbs]+=1;
         }
-    }   
+    }
+    
+    // Get electronics information if possible
+    uint32_t rawEleID = getRawEleIdFromMap(detId);
+    // if rawEleID==0, it means the detId was not found in the map. Skip this detId for now. //FIXME
+    if (rawEleID == 0) {
+      hlistXYhits_HECback_detIdMiss[detId.layer()]->Fill(x, y);
+      hlistGlobalXYhits_HECback_detIdMiss[detId.layer()]->Fill(xglob, yglob);
+      continue;
+    }
+
+    // Get hits per ECON-D
+    HGCalElectronicsId eleID(rawEleID);
+    //printEleIdBitValues(eleID);
+    EconDType key = std::make_tuple(eleID.zSide(), eleID.localFEDId(), eleID.captureBlock(), eleID.econdIdx());
+    // Update the map: if the key exists, add 1 to the value, otherwise insert it with value 1
+    if (EcondInfoMap_.find(key) == EcondInfoMap_.end()) {
+      std::cout << "key does not exist in map " << std::get<0>(key)
+                                                            << " " << std::get<1>(key) << " "
+                                                            << std::get<2>(key) << " "
+                                                            << std::get<3>(key) << std::endl;
+    }
+
+    if (!isBusy) {
+      EcondInfoMap_[key].FillHits(isTOA, passBXM1);
+    }
+  } // end digiColl
+
+  // Get number of words per ECON-D
+
+  for (const auto &mpair : EcondInfoMap_) {
+    EconDType key = mpair.first;
+    EcondInfoMap_.at(key).setNumDAQPacketWords();
+    if (outputECONDFile) {
+      EcondInfoMap_.at(mpair.first).printInfo(ofStreamECONDHitsFile_);
+    } else {
+      EcondInfoMap_.at(mpair.first).printInfo(std::cout);
+    }
+    EcondInfoMap_.at(mpair.first).resetHitsInfo();
+    std::cout << "after clear " << std::endl;
+    EcondInfoMap_.at(mpair.first).printInfo(std::cout);
   }
 
 }
@@ -528,7 +703,6 @@ void HGCScintAnalyzer::printEleIdBitValues(HGCalElectronicsId &eleId) {
             << ", rocChannel: " << (uint32_t)eleId.rocChannel()
             << ", cmWord: " << (uint32_t)eleId.cmWord() 
             << ", isCM: " << eleId.isCM() << std::endl; // "common mode"? Four dedicated cells for measuring electronics common mode noise?
-  std::cout << "   Print from module: "  << std::endl;
   //eleId.print();
 }
 
@@ -590,9 +764,9 @@ std::vector<float> HGCScintAnalyzer::minMaxRingPerLayer(std::map<uint32_t, uint3
 
 // Fix bits in detId to agree with older geometry version stored in the map
 uint32_t HGCScintAnalyzer::getRawEleIdFromMap(HGCScintillatorDetId didIt) {
-  //if (DEBUG) {
-  printDetIdBitValues(didIt);
-  //}
+  if (DEBUG) {
+    printDetIdBitValues(didIt);
+  }
 
   // ------------------------------------------
 
@@ -718,8 +892,11 @@ uint32_t HGCScintAnalyzer::getRawEleIdFromMap(HGCScintillatorDetId didIt) {
   return rawEleID;
 }
 
+
+
 // ------------ method called once each job just after ending the event loop  ------------
 void HGCScintAnalyzer::endJob() {
+  ofStreamECONDHitsFile_.close();
   // please remove this method if not needed
   // for(size_t idx=0; idx<layerTdcHits_.size(); idx++){
   //   int layer = idx+1+layerIdxOffset_;
